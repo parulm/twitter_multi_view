@@ -1,0 +1,4 @@
+#all imported py files
+*.pyc
+
+logwa.txt
