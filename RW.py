@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 from numpy.linalg import inv
 
-def find_kernel(G):
+def kernel_formula(G):
 	print ('Finding kernel...')
 
 	#Parameters
@@ -35,7 +35,8 @@ def find_kernel(G):
 	r1.shape = shapeR
 
 	K = np.matmul(inv(H),r1)
-
+	
+	#uncomment the following lines of code if you prefer an approximation over an exact solution
 	'''
 	factor1 = np.matmul(T, r1)
 	#factor2 = np.matmul(T, factor1)
@@ -91,133 +92,59 @@ def IRWK(G):
 	K.shape = shape
 	return K
 
-def IRWKV(G1, G2, G3, G4):
-    print ('Finding kernel by random walk...')
-    #Parameters
-    stop_prob = 0.1   # Stopping probability for each node
-    trans_prob = 0.01  # Transition probability
-    r0 = stop_prob * stop_prob
-    views = 3
 
-    nodes1 = G1.nodes()
-    nodes2 = G2.nodes()
-    nodes3 = G3.nodes()
-    nodes4 = G4.nodes()
+def multiview_IRWK(Garr):
+	#input an array of graphs
+	print ('Finding kernel by random walk...')
+	#Parameters
+	stop_prob = 0.1   # Stopping probability for each node
+	trans_prob = 0.01  # Transition probability
+	r0 = stop_prob * stop_prob
+	views = len(Garr)
 
+	nodes = []
+	for G in Garr:
+		nodes.append(G.nodes())
 
-    shape = (len(nodes1), len(nodes1))
-    shapeT = (len(nodes1) * len(nodes1), len(nodes1) * len(nodes1))
-    shapeR = (len(nodes1)*len(nodes1), 1)
+	shape = (len(nodes[0]), len(nodes[0]))
+	shapeT = (len(nodes[0]) * len(nodes[0]), len(nodes[0]) * len(nodes[0]))
+	shapeR = (len(nodes[0])*len(nodes[0]), 1)
+	
+	R0, Pt, r1, T = [None]*views, [None]*views, [None]*views, [None]*views
+	
+	for i in range(views):
+		R0[i] = np.array([(len(set.intersection(set(Garr[i].neighbors(x)), set(Garr[i].neighbors(y))))+1) / (len(set.union(set(Garr[i].neighbors(x)), set(Garr[i].neighbors(y))))+1) for x in nodes[i] for y in nodes[i]])
+		R0[i].shape = shape
 
-    R01 = np.array([(len(set.intersection(set(G1.neighbors(x)), set(G1.neighbors(y))))+1) /
-      len(set.union(set(G1.neighbors(x)), set(G1.neighbors(y))))
-      for x in nodes1 for y in nodes1])
-    R01.shape = shape
+		Pt[i] = np.array([((int(Garr[i].has_edge(x1, x)) * (1 - stop_prob - trans_prob * (views - 1)))+1) / (len(Garr[i].neighbors(x))+1) for x in nodes[i] for x1 in nodes[i]])
+		Pt[i].shape = shape
 
-    Pt1 = np.array([((int(G1.has_edge(x1, x)) * (1 - stop_prob - trans_prob * (views - 1)))+1) / (len(G1.neighbors(x))+1)
-      for x in nodes1 for x1 in nodes1])
-    Pt1.shape = shape
+		r1[i] = np.array([sum([Pt[i][x1, x] * R0[i][x1, y1] * Pt[i][y1, y]  for x1 in range(len(nodes[i])) for y1 in range(len(nodes[i]))]) for x in range(len(nodes[i])) for y in range(len(nodes[i]))])
+		r1[i].shape = shape
 
-
-    r11 = np.array([sum([Pt1[x1, x] * R01[x1, y1] * Pt1[y1, y]  for x1 in nodes1 for y1 in nodes1])
-        for x in nodes1 for y in nodes1])
-    r11.shape = shape
-
-    T1 = np.array([Pt1[x1, x] * R01[x1, z1] * Pt1[z1, z]
-        for x in nodes1 for z in nodes1 for x1 in nodes1 for z1 in nodes1])
-    T1.shape = shapeT
+		T[i] = np.array([Pt[i][x1, x] * R0[i][x1, z1] * Pt[i][z1, z] for x in range(len(nodes[i])) for z in range(len(nodes[i])) for x1 in range(len(nodes[i])) for z1 in range(len(nodes[i]))])
+		T[i].shape = shapeT
 
 
+	R = [None]*views
 
+	for j in range(views):
+		R[i].shape = shapeR
+		r1[i].shape = shapeR
 
-    R02 = np.array([(len(set.intersection(set(G2.neighbors(x)), set(G2.neighbors(y))))+1) /
-      (len(set.union(set(G2.neighbors(x)), set(G2.neighbors(y))))+1)
-      for x in nodes2 for y in nodes2])
-    R02.shape = shape
+	for i in range(10):
+		for k in range(views):
+			restM = None
+			restM.shape = shapeR
+			for j in range(views):
+				if k!=j:
+					restM+=R[j]
+			R[k] = r1[k] + np.matmul(T[k], R[k]) + trans_prob*restM
 
-    Pt2 = np.array([((int(G2.has_edge(x1, x)) * (1 - stop_prob - trans_prob * (views - 1)))+1) / (len(G2.neighbors(x))+1)
-      for x in nodes2 for x1 in nodes2])
-    Pt2.shape = shape
+	K = [None]*views
+	for i in range(views):
+		K[i] = R[i]
+		K[i].shape = shape
 
-
-    r12 = np.array([sum([Pt2[x1, x] * R02[x1, y1] * Pt2[y1, y]  for x1 in nodes2 for y1 in nodes2])
-        for x in nodes2 for y in nodes2])
-    r12.shape = shape
-
-    T2 = np.array([Pt2[x1, x] * R02[x1, z1] * Pt2[z1, z]
-        for x in nodes2 for z in nodes2 for x1 in nodes2 for z1 in nodes2])
-    T2.shape = shapeT
-
-
-    R03 = np.array([(len(set.intersection(set(G3.neighbors(x)), set(G3.neighbors(y))))+1) /
-      (len(set.union(set(G3.neighbors(x)), set(G3.neighbors(y))))+1)
-      for x in nodes3 for y in nodes3])
-    R03.shape = shape
-
-    Pt3 = np.array([((int(G3.has_edge(x1, x)) * (1 - stop_prob - trans_prob * (views - 1)))+1) / (len(G3.neighbors(x))+1)
-      for x in nodes3 for x1 in nodes3])
-    Pt3.shape = shape
-
-
-    r13 = np.array([sum([Pt3[x1, x] * R03[x1, y1] * Pt3[y1, y]  for x1 in nodes3 for y1 in nodes3])
-        for x in nodes3 for y in nodes3])
-    r13.shape = shape
-
-    T3 = np.array([Pt3[x1, x] * R03[x1, z1] * Pt3[z1, z]
-        for x in nodes3 for z in nodes3 for x1 in nodes3 for z1 in nodes3])
-    T3.shape = shapeT
-
-
-    R04 = np.array([(len(set.intersection(set(G4.neighbors(x)), set(G4.neighbors(y))))+1) /
-      (len(set.union(set(G4.neighbors(x)), set(G4.neighbors(y))))+1)
-      for x in nodes4 for y in nodes4])
-    R04.shape = shape
-
-    Pt4 = np.array([((int(G4.has_edge(x1, x)) * (1 - stop_prob - trans_prob * (views - 1)))+1) / (len(G4.neighbors(x))+1)
-      for x in nodes4 for x1 in nodes4])
-    Pt4.shape = shape
-
-
-    r14 = np.array([sum([Pt4[x1, x] * R04[x1, y1] * Pt4[y1, y]  for x1 in nodes4 for y1 in nodes4])
-        for x in nodes4 for y in nodes4])
-    r14.shape = shape
-
-    T4 = np.array([Pt4[x1, x] * R04[x1, z1] * Pt4[z1, z]
-        for x in nodes4 for z in nodes4 for x1 in nodes4 for z1 in nodes4])
-    T4.shape = shapeT
-
-
-
-    R1 = R01
-    R2 = R02
-    R3 = R03
-    R4 = R04
-
-    R1.shape = shapeR
-    R2.shape = shapeR
-    R3.shape = shapeR
-    R4.shape = shapeR
-
-    r11.shape = shapeR
-    r12.shape = shapeR
-    r13.shape = shapeR
-    r14.shape = shapeR
-
-    for i in range(10):
-        R1 = r11 + np.matmul(T1, R1) + trans_prob * R2 + trans_prob * R3 + trans_prob * R4
-        R2 = r12 + np.matmul(T2, R2) + trans_prob * R1 + trans_prob * R3 + trans_prob * R4
-        R3 = r13 + np.matmul(T3, R3) + trans_prob * R1 + trans_prob * R2 + trans_prob * R4
-        R4 = r14 + np.matmul(T4, R4) + trans_prob * R1 + trans_prob * R2 + trans_prob * R3
-
-
-    K1 = R1
-    K2 = R2
-    K3 = R3
-    K4 = R4
-
-    K1.shape = shape
-    K2.shape = shape
-    K3.shape = shape
-    K4.shape = shape
-
-    return [K1, K2, K3, K4]
+	
+	return K

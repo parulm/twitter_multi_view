@@ -37,14 +37,14 @@ G_social = add_edges_from(G_social, '/home/parul/repos/twitter_multi_view/social
 
 nodelist = list(G_reply.nodes())
 
-rand_smpl = [ nodelist[i] for i in sorted(random.sample(xrange(len(nodelist)), 5000)) ]
+rand_smpl = [ nodelist[i] for i in sorted(random.sample(xrange(len(nodelist)), 2000)) ]
 
 G_reply = G_reply.subgraph(rand_smpl)
 G_mention = G_mention.subgraph(rand_smpl)
 G_retweet = G_retweet.subgraph(rand_smpl)
 G_social = G_social.subgraph(rand_smpl)
 
-c = list(nx.k_clique_communities(G_social, 7))
+c = list(nx.k_clique_communities(G_social, 6))
 print len(c)
 
 mainpart = community.best_partition(G_social)
@@ -61,7 +61,8 @@ for commcnt in range(len(c)):
 	#else:
 	#	print 'Runtime error, one of the graphs is not connected'
 	#	continue
-	Klist = sg.IRWKV(Gr, Gm, Grr, Gs)
+	Garr = [Gr, Gm, Grr, Gs]
+	Klist = sg.multiview_IRWK(Garr)
 	for K in Klist:
 		print K
 		print 'average similarity is:', K.mean()
